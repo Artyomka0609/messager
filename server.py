@@ -862,13 +862,14 @@ def api_search(sock, token, qs):
         hidden = bool(c.execute("SELECT 1 FROM chat_hidden WHERE user_id=? AND peer_id=?",
                                 (me['id'], u['id'])).fetchone())
         u['has_history'] = has_h and not hidden
+        uq = q[1:] if q.startswith('@') else q
         if u['has_history']:
             # свои (уже есть переписка): можно искать по имени, фамилии, нику и номеру
             hay = ' '.join([u['name'], u['surname'], u['username'], u['phone']]).lower()
-            ok = q in hay or (digits and digits in u['phone'])
+            ok = bool(uq) and (uq in hay or (digits and digits in u['phone']))
         else:
-            # посторонних можно найти только по @нику
-            ok = q in (u['username'] or '').lower()
+            # посторонних можно найти только по полному @нику (частичный ввод ничего не выдаёт)
+            ok = bool(uq) and uq == (u['username'] or '').lower()
         if ok:
             out.append(u)
             if len(out) >= 20:

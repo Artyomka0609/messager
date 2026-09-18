@@ -30,6 +30,8 @@ DATABASE_URL = (os.environ.get('DATABASE_URL') or '').strip()
 IS_PG = DATABASE_URL.startswith('postgres')
 MAX_USERS = 50
 MAX_MSG = 4000
+MAX_IMG = 4 * 1024 * 1024  # не больше 4 МБ за фото
+ALLOWED_IMG = ('image/jpeg', 'image/png', 'image/webp', 'image/gif')
 WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 
 BOT_ID = 1          # id встроенного бота «Мессенджер»
@@ -122,6 +124,8 @@ SQLITE_SCHEMA = '''
         sender_id    INTEGER NOT NULL,
         recipient_id INTEGER NOT NULL,
         text         TEXT NOT NULL,
+        image        BLOB,
+        image_mime   TEXT,
         created_at   INTEGER NOT NULL,
         read         INTEGER DEFAULT 0
     );
@@ -161,6 +165,8 @@ PG_SCHEMA = '''
         sender_id    INTEGER NOT NULL,
         recipient_id INTEGER NOT NULL,
         text         TEXT NOT NULL,
+        image        BYTEA,
+        image_mime   TEXT,
         created_at   BIGINT NOT NULL,
         read         INTEGER DEFAULT 0
     );
@@ -184,6 +190,15 @@ def init_db():
             c.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
         if 'password_salt' not in cols:
             c.execute("ALTER TABLE users ADD COLUMN password_salt TEXT")
+    # миграция таблицы messages: колонки фото (для старых баз, где их ещё нет)
+    try:
+        c.execute("ALTER TABLE messages ADD COLUMN image " + ("BYTEA" if c.is_pg else "BLOB"))
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE messages ADD COLUMN image_mime TEXT")
+    except Exception:
+        pass
     c.commit()
     # бот
     row = c.execute("SELECT id FROM users WHERE id=?", (BOT_ID,)).fetchone()
@@ -274,16 +289,33 @@ def bot_welcome(user_id):
     c.close()
 
 
-def send_message(sender_id, recipient_id, text):
+def send_message(sender_id, recipient_id, text, image=None, image_mime=None):
     now = int(time.time() * 1000)
     c = db()
-    cur = c.execute("INSERT INTO messages (sender_id, recipient_id, text, created_at, read) "
-                    "VALUES (?,?,?,?,0) RETURNING id",
-                    (sender_id, recipient_id, text, now))
+    cur = c.execute("INSERT INTO messages (sender_id, recipient_id, text, image, image_mime, created_at, read) "
+                    "VALUES (?,?,?,?,?,?,0) RETURNING id",
+                    (sender_id, recipient_id, text, image if image is not None else None,
+                     image_mime if image is not None else None, now))
     mid = cur.fetchone()['id']
     c.commit()
     c.close()
     return mid, now
+
+
+def msg_json(r):
+    img = r['image'] if 'image' in r.keys() else None
+    if img is not None:
+        try:
+            blob = bytes(img)
+        except Exception:
+            blob = img
+        b64 = base64.b64encode(blob).decode('ascii')
+        return {'id': r['id'], 'from': r['sender_id'], 'to': r['recipient_id'],
+                'text': r['text'], 'created_at': r['created_at'], 'read': r['read'],
+                'image': b64, 'image_mime': r['image_mime'] or 'image/jpeg'}
+    return {'id': r['id'], 'from': r['sender_id'], 'to': r['recipient_id'],
+            'text': r['text'], 'created_at': r['created_at'], 'read': r['read'],
+            'image': None, 'image_mime': None}
 
 
 # --------------------------------------------------------------------------
@@ -442,8 +474,7 @@ class WSConn:
             rows = c.execute("SELECT * FROM messages WHERE recipient_id=? AND read=0 ORDER BY id", (uid,)).fetchall()
             c.close()
             for r in rows:
-                self.send_json({'type': 'msg', 'id': r['id'], 'from': r['sender_id'], 'to': r['recipient_id'],
-                                'text': r['text'], 'created_at': r['created_at']})
+                self.send_json({'type': 'msg', **msg_json(r)})
         except Exception:
             pass
         try:
@@ -494,7 +525,26 @@ class WSConn:
             text = (msg.get('text') or '').strip()
             to = msg.get('to')
             temp_id = msg.get('temp_id')
-            if not text or not isinstance(to, int) or len(text) > MAX_MSG:
+            img_b64 = msg.get('image')
+            img_mime = (msg.get('image_mime') or 'image/jpeg').lower()
+            raw = None
+            if img_b64:
+                img_b64 = str(img_b64).strip()
+                if 'base64,' in img_b64:
+                    img_b64 = img_b64.split('base64,', 1)[1]
+                try:
+                    raw = base64.b64decode(img_b64)
+                except Exception:
+                    self.send_json({'type': 'err', 'error': 'Некорректное изображение'})
+                    return
+                if not raw or len(raw) > MAX_IMG:
+                    self.send_json({'type': 'err', 'error': 'Фото слишком большое (макс. 4 МБ)'})
+                    return
+                if img_mime not in ALLOWED_IMG:
+                    self.send_json({'type': 'err', 'error': 'Недопустимый тип изображения'})
+                    return
+            if ((not text and raw is None) or not isinstance(to, int)
+                    or len(text) > MAX_MSG):
                 self.send_json({'type': 'err', 'error': 'Некорректное сообщение'})
                 return
             target = get_user(to)
@@ -503,9 +553,11 @@ class WSConn:
                 return
             if to == uid:
                 return
-            mid, now = send_message(uid, to, text)
+            mid, now = send_message(uid, to, text, raw, img_mime if raw is not None else None)
             self.send_json({'type': 'sent', 'temp_id': temp_id, 'id': mid, 'to': to})
-            HUB.send_to(to, {'type': 'msg', 'id': mid, 'from': uid, 'to': to, 'text': text, 'created_at': now})
+            HUB.send_to(to, {'type': 'msg', 'id': mid, 'from': uid, 'to': to, 'text': text,
+                             'created_at': now, 'image': img_b64 if raw is not None else None,
+                             'image_mime': img_mime if raw is not None else None})
             # если чат был скрыт — новое сообщение возвращает его обоим
             c = db()
             c.execute("DELETE FROM chat_hidden WHERE (user_id=? AND peer_id=?) OR (user_id=? AND peer_id=?)",
@@ -727,7 +779,7 @@ def contacts_for(me):
                            (u['id'], me['id'])).fetchone()['n']
         out.append({
             **u,
-            'last_text': last['text'] if last else '',
+            'last_text': ('📷 Фото' if last['image'] is not None else last['text']) if last else '',
             'last_by': last['sender_id'] if last else None,
             'last_at': last['created_at'] if last else None,
             'unread': unread,
@@ -786,8 +838,7 @@ def api_history(sock, token, qs):
         "SELECT * FROM messages WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?) ORDER BY id DESC LIMIT 80",
         (me['id'], with_id, with_id, me['id'])).fetchall()
     c.close()
-    arr = [{ 'id': r['id'], 'from': r['sender_id'], 'to': r['recipient_id'], 'text': r['text'],
-             'created_at': r['created_at'], 'read': r['read'] } for r in reversed(rows)]
+    arr = [msg_json(r) for r in reversed(rows)]
     json_resp(sock, 200, {'messages': arr})
 
 

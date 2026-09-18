@@ -479,10 +479,24 @@
     msg.setAttribute('data-read', m.read ? '1' : '0');
     var bubble = document.createElement('div');
     bubble.className = 'bubble';
-    var txt = document.createElement('div');
-    txt.className = 'msg-text';
-    txt.innerHTML = linkify(m.text);
-    bubble.appendChild(txt);
+    if (m.image) {
+      var ph = document.createElement('div');
+      ph.className = 'msg-photo';
+      var im = document.createElement('img');
+      im.src = 'data:' + (m.image_mime || 'image/jpeg') + ';base64,' + m.image;
+      im.alt = 'Фото';
+      im.addEventListener('click', function () {
+        window.open(im.src, '_blank');
+      });
+      ph.appendChild(im);
+      bubble.appendChild(ph);
+    }
+    if (m.text) {
+      var txt = document.createElement('div');
+      txt.className = 'msg-text';
+      txt.innerHTML = linkify(m.text);
+      bubble.appendChild(txt);
+    }
     var meta = document.createElement('div');
     meta.className = 'msg-meta';
     var tm = document.createElement('span');
@@ -507,23 +521,99 @@
   }
 
   // --- отправка ---
+  var attachB64 = null;
+  var attachMime = null;
+
   function sendCurrent() {
     var inp = $('msg-input');
     var text = inp.value.replace(/\s+$/, '');
-    if (!text || activeId == null) return;
+    if ((!text && !attachB64) || activeId == null) return;
     var temp_id = 't' + (++sendSeq);
     var now = Date.now();
-    renderMsg({ id: temp_id, from: me.id, to: activeId, text: text, created_at: now, read: false, temp_id: temp_id });
+    renderMsg({ id: temp_id, from: me.id, to: activeId, text: text, created_at: now, read: false,
+                temp_id: temp_id, image: attachB64, image_mime: attachMime });
     $('messages').scrollTop = $('messages').scrollHeight;
     inp.value = '';
     autoGrow();
     stopTyping();
     if (ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({ type: 'msg', to: activeId, text: text, temp_id: temp_id }));
+      var out = { type: 'msg', to: activeId, text: text, temp_id: temp_id };
+      if (attachB64) { out.image = attachB64; out.image_mime = attachMime; }
+      ws.send(JSON.stringify(out));
     } else {
       toast('Нет соединения с сервером');
     }
+    clearAttach();
   }
+
+  // --- вложение фото ---
+  function fileToJpeg(file, cb) {
+    var fr = new FileReader();
+    fr.onerror = function () { cb(null); };
+    fr.onload = function () {
+      var img = new Image();
+      img.onerror = function () { cb(null); };
+      img.onload = function () {
+        var w = img.width, h = img.height;
+        if (!w || !h) { cb(null); return; }
+        var MAX = 1600;
+        var sc = Math.min(1, MAX / Math.max(w, h));
+        var c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(w * sc));
+        c.height = Math.max(1, Math.round(h * sc));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        var url = c.toDataURL('image/jpeg', 0.82);
+        cb({ url: url, mime: 'image/jpeg', b64: url.split(',')[1] });
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  }
+
+  function showAttach(res) {
+    var p = $('attach-preview');
+    p.innerHTML = '';
+    var thumb = document.createElement('img');
+    thumb.src = res.url;
+    var meta = document.createElement('div');
+    meta.className = 'ap-meta';
+    var nm = document.createElement('div');
+    nm.className = 'ap-name';
+    nm.textContent = 'Фото прикреплено';
+    var sub = document.createElement('div');
+    sub.className = 'ap-sub';
+    sub.textContent = 'Подпись — в поле сообщения';
+    meta.appendChild(nm); meta.appendChild(sub);
+    var x = document.createElement('button');
+    x.className = 'ap-x';
+    x.textContent = '\u2715';
+    x.title = 'Убрать фото';
+    x.addEventListener('click', clearAttach);
+    p.appendChild(thumb); p.appendChild(meta); p.appendChild(x);
+    p.classList.remove('hidden');
+    $('msg-input').focus();
+  }
+
+  function clearAttach() {
+    attachB64 = null;
+    attachMime = null;
+    var p = $('attach-preview');
+    p.classList.add('hidden');
+    p.innerHTML = '';
+  }
+
+  $('attach-btn').addEventListener('click', function () { $('file-input').click(); });
+  $('file-input').addEventListener('change', function () {
+    var f = this.files && this.files[0];
+    this.value = '';
+    if (!f || f.type.indexOf('image/') !== 0) { toast('Выберите фото'); return; }
+    fileToJpeg(f, function (res) {
+      if (!res) { toast('Не удалось обработать фото'); return; }
+      attachB64 = res.b64;
+      attachMime = res.mime;
+      showAttach(res);
+    });
+  });
 
   $('send-btn').addEventListener('click', sendCurrent);
   $('msg-input').addEventListener('keydown', function (e) {
@@ -630,6 +720,7 @@
     $('messages').innerHTML = '';
     $('search-input').value = '';
     hideChatMenu();
+    clearAttach();
     show('login-view');
     $('pass-input').value = '';
     $('reg-pass').value = '';
@@ -750,11 +841,11 @@
           var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
           if (nearBottom) box.scrollTop = box.scrollHeight;
         }
-        touchContact(chatId, m.text, m.created_at, m.from !== me.id);
+        touchContact(chatId, m.image ? '📷 Фото' : m.text, m.created_at, m.from !== me.id);
         if (m.from !== me.id && !isActive) {
           beep();
           var who = contacts.get(m.from);
-          if (document.hidden && who) toast(fullName(who) + ': ' + m.text.slice(0, 40));
+          if (document.hidden && who) toast(fullName(who) + ': ' + (m.image ? '📷 Фото' : m.text.slice(0, 40)));
         } else if (m.from !== me.id && isActive) {
           markRead(activeId);
         }

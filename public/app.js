@@ -480,16 +480,54 @@
     var bubble = document.createElement('div');
     bubble.className = 'bubble';
     if (m.image) {
-      var ph = document.createElement('div');
-      ph.className = 'msg-photo';
-      var im = document.createElement('img');
-      im.src = 'data:' + (m.image_mime || 'image/jpeg') + ';base64,' + m.image;
-      im.alt = 'Фото';
-      im.addEventListener('click', function () {
-        openLightbox(m.image, m.image_mime);
-      });
-      ph.appendChild(im);
-      bubble.appendChild(ph);
+      var mm = m.image_mime || 'application/octet-stream';
+      if (mm.indexOf('image/') === 0) {
+        var ph = document.createElement('div');
+        ph.className = 'msg-photo';
+        var im = document.createElement('img');
+        im.src = 'data:' + mm + ';base64,' + m.image;
+        im.alt = 'Фото';
+        im.addEventListener('click', function () { openLightbox(m.image, mm, m.image_name); });
+        ph.appendChild(im);
+        bubble.appendChild(ph);
+      } else if (mm.indexOf('video/') === 0) {
+        var pw = document.createElement('div');
+        pw.className = 'msg-video';
+        var vid = document.createElement('video');
+        vid.controls = true;
+        vid.preload = 'metadata';
+        vid.src = 'data:' + mm + ';base64,' + m.image;
+        vid.addEventListener('click', function (ev) { ev.stopPropagation(); openLightbox(m.image, mm, m.image_name); });
+        pw.appendChild(vid);
+        bubble.appendChild(pw);
+      } else {
+        var pf = document.createElement('div');
+        pf.className = 'msg-file';
+        var ic = document.createElement('div');
+        ic.className = 'mf-icon';
+        ic.textContent = '\u{1F4C4}';
+        var md = document.createElement('div');
+        md.className = 'mf-meta';
+        var mn = document.createElement('div');
+        mn.className = 'mf-name';
+        mn.textContent = m.image_name || ('Файл' + fileExtFor(mm));
+        var msz = document.createElement('div');
+        msz.className = 'mf-size';
+        msz.textContent = fmtSize(m.image.length * 3 / 4);
+        md.appendChild(mn); md.appendChild(msz);
+        var dl = document.createElement('button');
+        dl.className = 'mf-dl';
+        dl.textContent = '\u{2B07}';
+        dl.title = 'Скачать';
+        dl.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          downloadDataUrl('data:' + mm + ';base64,' + m.image,
+                          m.image_name || ('file' + fileExtFor(mm)));
+        });
+        pf.appendChild(ic); pf.appendChild(md); pf.appendChild(dl);
+        pf.addEventListener('click', function () { openLightbox(m.image, mm, m.image_name); });
+        bubble.appendChild(pf);
+      }
     }
     if (m.text) {
       var txt = document.createElement('div');
@@ -520,11 +558,29 @@
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'read', to: id }));
   }
 
-  // --- отправка ---
+  // --- отправка и вложения ---
   var attachB64 = null;
   var attachMime = null;
+  var attachName = null;
 
-  // --- просмотр фото ---
+  function attachLabel(m) {
+    var mm = (m.image_mime || '');
+    if (mm.indexOf('video/') === 0) return '🎬 Видео';
+    if (mm.indexOf('audio/') === 0) return '🎵 Аудио';
+    if (mm.indexOf('image/') === 0) return '📷 Фото';
+    return '📄 Файл';
+  }
+
+  function fileExtFor(mime) {
+    mime = (mime || '').toLowerCase();
+    var sub = (mime.split('/')[1] || 'bin').replace('x-', '');
+    if (sub === 'jpeg' || sub === 'jpg') return '.jpg';
+    if (sub === 'svg+xml') return '.svg';
+    if (sub === 'plain') return '.txt';
+    if (sub === 'octet-stream') return '.bin';
+    return '.' + sub;
+  }
+
   function imgExtFor(mime) {
     mime = (mime || '').toLowerCase();
     if (mime.indexOf('png') >= 0) return '.png';
@@ -533,28 +589,61 @@
     return '.jpg';
   }
 
-  function openLightbox(b64, mime) {
-    $('lb-img').src = 'data:' + (mime || 'image/jpeg') + ';base64,' + b64;
-    $('lightbox').classList.remove('hidden');
+  function fmtSize(n) {
+    n = Number(n);
+    if (!isFinite(n) || n <= 0) return '';
+    if (n < 1024) return n + ' Б';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' КБ';
+    return (n / 1048576).toFixed(1) + ' МБ';
   }
 
+  function dataUrlFor(mime, b64) { return 'data:' + (mime || 'application/octet-stream') + ';base64,' + b64; }
+
+  function downloadDataUrl(src, name) {
+    var a = document.createElement('a');
+    a.href = src;
+    a.download = name || 'file_' + Date.now();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  // --- просмотр вложения на весь экран ---
+  var lbSrc = '';
+  var lbName = '';
+  function openLightbox(b64, mime, name) {
+    var mm = mime || 'application/octet-stream';
+    lbSrc = dataUrlFor(mm, b64);
+    lbName = name || 'photo_' + Date.now() + imgExtFor(mm);
+    var img = $('lb-img'), vid = $('lb-video'), fbox = $('lb-file');
+    img.classList.add('hidden'); vid.classList.add('hidden'); fbox.classList.add('hidden');
+    if (mm.indexOf('image/') === 0) {
+      img.src = lbSrc;
+      img.classList.remove('hidden');
+    } else if (mm.indexOf('video/') === 0) {
+      vid.src = lbSrc;
+      vid.classList.remove('hidden');
+    } else {
+      $('lb-file-name').textContent = lbName;
+      $('lb-file-size').textContent = fmtSize(b64.length * 3 / 4);
+      fbox.classList.remove('hidden');
+    }
+    $('lightbox').classList.remove('hidden');
+  }
   function closeLightbox() {
     $('lightbox').classList.add('hidden');
     $('lb-img').src = '';
+    var vid = $('lb-video');
+    vid.removeAttribute('src');
+    try { vid.load(); } catch (e) {}
+    lbSrc = ''; lbName = '';
   }
-
   $('lb-close').addEventListener('click', closeLightbox);
   $('lb-backdrop').addEventListener('click', closeLightbox);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLightbox(); });
   $('lb-download').addEventListener('click', function () {
-    var img = $('lb-img');
-    if (!img.src) { toast('Нет изображения'); return; }
-    var a = document.createElement('a');
-    a.href = img.src;
-    a.download = 'photo_' + Date.now() + imgExtFor(img.src.split(';')[0].split(':')[1]);
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    if (!lbSrc) return;
+    downloadDataUrl(lbSrc, lbName);
   });
 
   function sendCurrent() {
@@ -564,14 +653,14 @@
     var temp_id = 't' + (++sendSeq);
     var now = Date.now();
     renderMsg({ id: temp_id, from: me.id, to: activeId, text: text, created_at: now, read: false,
-                temp_id: temp_id, image: attachB64, image_mime: attachMime });
+                temp_id: temp_id, image: attachB64, image_mime: attachMime, image_name: attachName });
     $('messages').scrollTop = $('messages').scrollHeight;
     inp.value = '';
     autoGrow();
     stopTyping();
     if (ws && ws.readyState === 1) {
       var out = { type: 'msg', to: activeId, text: text, temp_id: temp_id };
-      if (attachB64) { out.image = attachB64; out.image_mime = attachMime; }
+      if (attachB64) { out.image = attachB64; out.image_mime = attachMime; out.image_name = attachName || ''; }
       ws.send(JSON.stringify(out));
     } else {
       toast('Нет соединения с сервером');
@@ -579,7 +668,9 @@
     clearAttach();
   }
 
-  // --- вложение фото ---
+  // --- выбор вложения (фото/видео/файл) ---
+  var FILE_LIMIT = 50 * 1024 * 1024;
+
   function fileToJpeg(file, cb) {
     var fr = new FileReader();
     fr.onerror = function () { cb(null); };
@@ -596,23 +687,101 @@
         c.height = Math.max(1, Math.round(h * sc));
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
         var url = c.toDataURL('image/jpeg', 0.82);
-        cb({ url: url, mime: 'image/jpeg', b64: url.split(',')[1] });
+        cb({ url: url, mime: 'image/jpeg', b64: url.split(',')[1], name: file.name || '' });
       };
       img.src = fr.result;
     };
     fr.readAsDataURL(file);
   }
 
-  function showAttach(res) {
+  function hideAttachMenu() { $('attach-menu').classList.add('hidden'); }
+
+  function pickKind(kind) {
+    hideAttachMenu();
+    if (window.showOpenFilePicker) {
+      var types = [];
+      if (kind === 'image') {
+        types = [{ description: 'Фото', accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.gif'] } }];
+      } else if (kind === 'video') {
+        types = [{ description: 'Видео', accept: { 'video/*': ['.mp4', '.webm', '.mov', '.mkv', '.avi'] } }];
+      }
+      window.showOpenFilePicker({ types: types, multiple: false })
+        .then(function (handles) {
+          if (handles && handles[0]) {
+            handles[0].getFile().then(function (f) { handlePicked(f, kind); });
+          }
+        })
+        .catch(function (err) {
+          if (err && err.name === 'AbortError') return;
+          fallbackInput(kind);
+        });
+      return;
+    }
+    fallbackInput(kind);
+  }
+
+  function fallbackInput(kind) {
+    var inp = $('file-input');
+    inp.accept = kind === 'image' ? 'image/*' : (kind === 'video' ? 'video/*' : '*/*');
+    inp.value = '';
+    inp.dataset.kind = kind;
+    inp.click();
+  }
+
+  function handlePicked(file, kind) {
+    if (!file) return;
+    if (file.size > FILE_LIMIT) { toast('Файл больше 50 МБ'); return; }
+    var mime = (file.type || '').toLowerCase() || 'application/octet-stream';
+    if (mime.indexOf('image/') !== 0) {
+      var fr = new FileReader();
+      fr.onerror = function () { toast('Не удалось прочитать файл'); };
+      fr.onload = function () {
+        var url = String(fr.result);
+        var b64 = url.indexOf('base64,') >= 0 ? url.split('base64,', 2)[1] : '';
+        if (!b64) { toast('Не удалось прочитать файл'); return; }
+        attachB64 = b64;
+        attachMime = mime;
+        attachName = file.name || '';
+        showAttachPreview({ url: url, mime: mime, b64: b64, name: attachName });
+      };
+      fr.readAsDataURL(file);
+      return;
+    }
+    fileToJpeg(file, function (res) {
+      if (!res) { toast('Не удалось обработать фото'); return; }
+      attachB64 = res.b64;
+      attachMime = res.mime;
+      attachName = res.name;
+      showAttachPreview(res);
+    });
+  }
+
+  function showAttachPreview(res) {
     var p = $('attach-preview');
     p.innerHTML = '';
-    var thumb = document.createElement('img');
-    thumb.src = res.url;
+    var mime = res.mime || '';
+    var thumb = document.createElement('div');
+    thumb.className = 'ap-item';
+    if (mime.indexOf('image/') === 0) {
+      var im = document.createElement('img');
+      im.src = res.url;
+      thumb.appendChild(im);
+    } else if (mime.indexOf('video/') === 0) {
+      var vd = document.createElement('video');
+      vd.muted = true;
+      vd.preload = 'metadata';
+      vd.src = res.url;
+      vd.addEventListener('loadedmetadata', function () { try { vd.currentTime = 0.1; } catch (e) {} });
+      thumb.appendChild(vd);
+    } else {
+      thumb.classList.add('ap-ico');
+      thumb.textContent = '\u{1F4C4}';
+    }
     var meta = document.createElement('div');
     meta.className = 'ap-meta';
     var nm = document.createElement('div');
     nm.className = 'ap-name';
-    nm.textContent = 'Фото прикреплено';
+    nm.textContent = res.name || 'Вложение прикреплено';
     var sub = document.createElement('div');
     sub.className = 'ap-sub';
     sub.textContent = 'Подпись — в поле сообщения';
@@ -620,7 +789,7 @@
     var x = document.createElement('button');
     x.className = 'ap-x';
     x.textContent = '\u2715';
-    x.title = 'Убрать фото';
+    x.title = 'Убрать вложение';
     x.addEventListener('click', clearAttach);
     p.appendChild(thumb); p.appendChild(meta); p.appendChild(x);
     p.classList.remove('hidden');
@@ -630,22 +799,28 @@
   function clearAttach() {
     attachB64 = null;
     attachMime = null;
+    attachName = null;
     var p = $('attach-preview');
     p.classList.add('hidden');
     p.innerHTML = '';
   }
 
-  $('attach-btn').addEventListener('click', function () { $('file-input').click(); });
+  $('attach-btn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    $('attach-menu').classList.toggle('hidden');
+  });
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('#attach-menu') && !e.target.closest('#attach-btn')) hideAttachMenu();
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.am-item'), function (it) {
+    it.addEventListener('click', function () { pickKind(it.getAttribute('data-kind')); });
+  });
   $('file-input').addEventListener('change', function () {
     var f = this.files && this.files[0];
+    var kind = this.dataset.kind || 'file';
     this.value = '';
-    if (!f || f.type.indexOf('image/') !== 0) { toast('Выберите фото'); return; }
-    fileToJpeg(f, function (res) {
-      if (!res) { toast('Не удалось обработать фото'); return; }
-      attachB64 = res.b64;
-      attachMime = res.mime;
-      showAttach(res);
-    });
+    this.dataset.kind = '';
+    handlePicked(f, kind);
   });
 
   $('send-btn').addEventListener('click', sendCurrent);
@@ -875,11 +1050,11 @@
           var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
           if (nearBottom) box.scrollTop = box.scrollHeight;
         }
-        touchContact(chatId, m.image ? '📷 Фото' : m.text, m.created_at, m.from !== me.id);
+        touchContact(chatId, m.image ? attachLabel(m) : m.text, m.created_at, m.from !== me.id);
         if (m.from !== me.id && !isActive) {
           beep();
           var who = contacts.get(m.from);
-          if (document.hidden && who) toast(fullName(who) + ': ' + (m.image ? '📷 Фото' : m.text.slice(0, 40)));
+          if (document.hidden && who) toast(fullName(who) + ': ' + (m.image ? attachLabel(m) : m.text.slice(0, 40)));
         } else if (m.from !== me.id && isActive) {
           markRead(activeId);
         }

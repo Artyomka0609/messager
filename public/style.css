@@ -80,7 +80,7 @@ body{
 .code-inp:focus{border-color:var(--accent)}
 
 /* ---------- приложение ---------- */
-.app{display:flex;height:100vh}
+.app{display:flex;height:100vh;height:var(--apph,100vh)}
 #sidebar{width:320px;min-width:280px;background:var(--side);display:flex;flex-direction:column;border-right:1px solid var(--border)}
 .side-head{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border)}
 .my-avatar,.chat-avatar,.avatar{
@@ -213,19 +213,40 @@ body{
 .back-btn{display:none}
 @media (max-width:760px){
   html,body{height:100%}
-  .app{height:100vh;height:100dvh}
+  body{font-size:14px}
+  .app{height:100vh;height:var(--apph,100vh)}
   #sidebar{width:100%;border-right:none}
   #chat-panel{
     position:absolute;inset:0;display:none;background:var(--bg);z-index:5;
   }
   .app.mobile-chat #chat-panel{display:flex}
   .app.mobile-chat #sidebar{display:none}
-  .back-btn{display:flex;align-items:center;justify-content:center;font-size:22px}
-  .messages{padding:12px 12px 6px}
-  .msg{max-width:82%}
-  .composer{padding:8px 10px;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
-  .side-head{padding-top:calc(12px + env(safe-area-inset-top))}
-  .chat-head{padding-top:calc(10px + env(safe-area-inset-top))}
-  .emoji-panel{left:10px;right:10px;width:auto}
-  .auth-card{padding:26px 20px}
+  .back-btn{display:flex;align-items:center;justify-content:center;font-size:23px}
+  .my-avatar,.chat-avatar{width:40px;height:40px;font-size:15px}
+  .side-head{padding:8px 10px;padding-top:calc(8px + env(safe-area-inset-top));gap:10px}
+  .my-name{font-size:14px}
+  .search-wrap{padding:6px 10px 4px}
+  .search{padding:8px 12px;font-size:13px}
+  .contacts{padding-bottom:env(safe-area-inset-bottom)}
+  .contact{gap:10px;padding:7px 10px}
+  .contact .avatar{width:44px;height:44px;font-size:16px}
+  .contact-name{font-size:14px}
+  .contact-uname{font-size:11px}
+  .contact-preview{font-size:12px}
+  .chat-head{padding:6px 10px;padding-top:calc(6px + env(safe-area-inset-top));gap:10px}
+  .chat-name{font-size:15px}
+  .chat-status{font-size:12px}
+  .messages{padding:10px 10px 4px}
+  .msg{max-width:84%;padding:6px 10px}
+  .composer{gap:6px;padding:6px 8px;padding-bottom:calc(6px + env(safe-area-inset-bottom))}
+  .msg-input{padding:9px 12px;padding-top:10px;padding-bottom:10px;font-size:16px;border-radius:10px}
+  .send-btn{width:40px;height:40px;font-size:17px}
+  .emoji-btn{font-size:20px}
+  .emoji-panel{left:8px;right:8px;width:auto}
+  .auth-card{padding:22px 18px}
+  .brand-logo{width:56px;height:56px;font-size:28px}
+  .inp{font-size:16px;padding:11px 13px}
+  .ce-pic{font-size:48px}
+  .ce-title{font-size:18px}
+  .ce-sub{font-size:13px}
 }

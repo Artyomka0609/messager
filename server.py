@@ -694,7 +694,12 @@ def api_login(sock, body):
 
 def contacts_for(me):
     c = db()
-    rows = c.execute("SELECT * FROM users WHERE id<>? ORDER BY id", (me['id'],)).fetchall()
+    # показываем только тех, с кем уже есть переписка — остальных можно найти через /api/search
+    rows = c.execute(
+        "SELECT u.* FROM users u WHERE u.id<>? AND EXISTS ("
+        "SELECT 1 FROM messages m WHERE (m.sender_id=? AND m.recipient_id=u.id) "
+        "OR (m.sender_id=u.id AND m.recipient_id=?)) ORDER BY u.id",
+        (me['id'], me['id'], me['id'])).fetchall()
     out = []
     for r in rows:
         u = user_dict(r)
@@ -765,6 +770,57 @@ def api_history(sock, token, qs):
     json_resp(sock, 200, {'messages': arr})
 
 
+def api_search(sock, token, qs):
+    me = get_user_by_token(token)
+    if me is None:
+        return json_resp(sock, 401, {'error': 'Сессия недействительна'})
+    q = (qs.get('q', [''])[0] or '').strip().lower()[:60]
+    c = db()
+    if not q:
+        c.close()
+        return json_resp(sock, 200, {'users': []})
+    rows = c.execute("SELECT * FROM users WHERE id<>? ORDER BY created_at", (me['id'],)).fetchall()
+    digits = re.sub(r'\D', '', q)
+    out = []
+    for r in rows:
+        u = user_dict(r)
+        has_h = bool(c.execute(
+            "SELECT 1 FROM messages WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?) LIMIT 1",
+            (me['id'], u['id'], u['id'], me['id'])).fetchone())
+        u['has_history'] = has_h
+        if has_h:
+            # свои (уже есть переписка): можно искать по имени, фамилии, нику и номеру
+            hay = ' '.join([u['name'], u['surname'], u['username'], u['phone']]).lower()
+            ok = q in hay or (digits and digits in u['phone'])
+        else:
+            # посторонних можно найти только по @нику
+            ok = q in (u['username'] or '').lower()
+        if ok:
+            out.append(u)
+            if len(out) >= 20:
+                break
+    c.close()
+    json_resp(sock, 200, {'users': out})
+
+
+def api_user(sock, token, qs):
+    me = get_user_by_token(token)
+    if me is None:
+        return json_resp(sock, 401, {'error': 'Сессия недействительна'})
+    try:
+        uid = int(qs.get('id', ['0'])[0])
+    except Exception:
+        return json_resp(sock, 400, {'error': 'bad id'})
+    if uid == me['id']:
+        return json_resp(sock, 400, {'error': 'Это вы'})
+    c = db()
+    row = c.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    c.close()
+    if row is None:
+        return json_resp(sock, 404, {'error': 'Пользователь не найден'})
+    json_resp(sock, 200, {'user': user_dict(row)})
+
+
 def handle_http(sock, addr, request_line, headers, rest):
     parts = request_line.split(' ')
     if len(parts) < 3:
@@ -809,6 +865,10 @@ def handle_http(sock, addr, request_line, headers, rest):
             return api_profile(sock, token, read_body(sock, headers, rest))
         if method == 'GET' and route == '/api/history':
             return api_history(sock, token, qs)
+        if method == 'GET' and route == '/api/search':
+            return api_search(sock, token, qs)
+        if method == 'GET' and route == '/api/user':
+            return api_user(sock, token, qs)
         return http_resp(sock, 404, 'text/plain', b'no such api')
 
     if method == 'GET':

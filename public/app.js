@@ -14,9 +14,27 @@
   var lastTypingSend = 0;
   var sendSeq = 0;            // для temp_id
   var reconnectTries = 0;
+  var searchResults = [];   // люди из серверного поиска, которых ещё нет в контактах
+  var searchPending = false;
+  var searchTimer = null;
+  var infoQueue = {};       // uid, для которых уже идёт подгрузка данных
 
   var $ = function (id) { return document.getElementById(id); };
   var isMobile = function () { return window.matchMedia('(max-width:760px)').matches; };
+
+  // динамическая высота приложения: учитываем клавиатуру, адресную строку
+  // и системные кнопки (Home/Назад/Недавние), которых не видно через 100vh
+  function setAppHeight() {
+    var h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty('--apph', h + 'px');
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', setAppHeight);
+    window.visualViewport.addEventListener('scroll', setAppHeight);
+  } else {
+    window.addEventListener('resize', setAppHeight);
+  }
+  setAppHeight();
 
   // ---------------- утилиты ----------------
   function esc(s) {
@@ -254,56 +272,119 @@
         return fullName(c).toLowerCase().includes(q) || ('@' + c.username).toLowerCase().includes(q);
       });
     }
-    $('empty-contacts').classList.toggle('hidden', list.length > 0);
-    list.forEach(function (c) {
-      var div = document.createElement('div');
-      div.className = 'contact' + (c.id === activeId ? ' active' : '');
-      div.setAttribute('data-id', c.id);
-      var body = document.createElement('div');
-      body.className = 'contact-body';
-      var top = document.createElement('div');
-      top.className = 'contact-top';
-      var name = document.createElement('div');
-      name.className = 'contact-name';
-      name.textContent = fullName(c);
-      var time = document.createElement('div');
-      time.className = 'contact-time';
-      time.textContent = fmtTime(c.last_at);
-      top.appendChild(name); top.appendChild(time);
-      var un = document.createElement('div');
-      un.className = 'contact-uname';
-      un.textContent = '@' + c.username;
-      var bottom = document.createElement('div');
-      bottom.className = 'contact-bottom';
-      var prev = document.createElement('div');
-      if (nowTyping(c.id)) {
-        prev.className = 'contact-preview typing-preview';
-        prev.textContent = 'печатает…';
+    var extra = [];
+    if (q) {
+      searchResults.forEach(function (u) {
+        if (!contacts.has(u.id)) extra.push(u);
+      });
+    }
+    var tip = $('empty-contacts');
+    if (list.length === 0 && extra.length === 0) {
+      tip.classList.remove('hidden');
+      if (!q) {
+        tip.innerHTML = 'Пока нет чатов.<br>Найдите собеседника по @нику (например @ivan) — напишите ему, и чат появится здесь.';
+      } else if (searchPending) {
+        tip.textContent = 'Ищем…';
       } else {
-        prev.className = 'contact-preview' + (c.last_by === me.id ? ' me' : '');
-        prev.textContent = (c.last_by === me.id ? 'Вы: ' : '') + (c.last_text || '');
+        tip.innerHTML = 'Никого не нашли по запросу «' + esc(q) + '»';
       }
-      bottom.appendChild(prev);
-      if (c.unread > 0) {
-        var b = document.createElement('div');
-        b.className = 'badge';
-        b.textContent = c.unread;
-        bottom.appendChild(b);
-      }
-      body.appendChild(top); body.appendChild(un); body.appendChild(bottom);
-      var st = document.createElement('div');
-      st.className = 'avatar';
-      st.style.background = 'linear-gradient(135deg,' + avatarColor(c.id) + ',#6759c9)';
-      st.textContent = initials(c);
-      if (c.online) {
-        var dot = document.createElement('div');
-        dot.className = 'online-dot';
-        st.appendChild(dot);
-      }
-      div.appendChild(st); div.appendChild(body);
-      div.addEventListener('click', function () { openChat(c.id); });
-      wrap.appendChild(div);
-    });
+    } else {
+      tip.classList.add('hidden');
+    }
+    list.forEach(function (c) { renderContactRow(wrap, c); });
+    extra.forEach(function (u) { renderSearchRow(wrap, u); });
+  }
+
+  function renderContactRow(wrap, c) {
+    var div = document.createElement('div');
+    div.className = 'contact' + (c.id === activeId ? ' active' : '');
+    div.setAttribute('data-id', c.id);
+    var body = document.createElement('div');
+    body.className = 'contact-body';
+    var top = document.createElement('div');
+    top.className = 'contact-top';
+    var name = document.createElement('div');
+    name.className = 'contact-name';
+    name.textContent = fullName(c);
+    var time = document.createElement('div');
+    time.className = 'contact-time';
+    time.textContent = fmtTime(c.last_at);
+    top.appendChild(name); top.appendChild(time);
+    var un = document.createElement('div');
+    un.className = 'contact-uname';
+    un.textContent = '@' + c.username;
+    var bottom = document.createElement('div');
+    bottom.className = 'contact-bottom';
+    var prev = document.createElement('div');
+    if (nowTyping(c.id)) {
+      prev.className = 'contact-preview typing-preview';
+      prev.textContent = 'печатает…';
+    } else {
+      prev.className = 'contact-preview' + (c.last_by === me.id ? ' me' : '');
+      prev.textContent = (c.last_by === me.id ? 'Вы: ' : '') + (c.last_text || '');
+    }
+    bottom.appendChild(prev);
+    if (c.unread > 0) {
+      var b = document.createElement('div');
+      b.className = 'badge';
+      b.textContent = c.unread;
+      bottom.appendChild(b);
+    }
+    body.appendChild(top); body.appendChild(un); body.appendChild(bottom);
+    var st = document.createElement('div');
+    st.className = 'avatar';
+    st.style.background = 'linear-gradient(135deg,' + avatarColor(c.id) + ',#6759c9)';
+    st.textContent = initials(c);
+    if (c.online) {
+      var dot = document.createElement('div');
+      dot.className = 'online-dot';
+      st.appendChild(dot);
+    }
+    div.appendChild(st); div.appendChild(body);
+    div.addEventListener('click', function () { openChat(c.id); });
+    wrap.appendChild(div);
+  }
+
+  function renderSearchRow(wrap, u) {
+    var div = document.createElement('div');
+    div.className = 'contact found-row';
+    div.setAttribute('data-id', u.id);
+    var st = document.createElement('div');
+    st.className = 'avatar';
+    st.style.background = 'linear-gradient(135deg,' + avatarColor(u.id) + ',#6759c9)';
+    st.textContent = initials(u);
+    div.appendChild(st);
+    var body = document.createElement('div');
+    body.className = 'contact-body';
+    var top = document.createElement('div');
+    top.className = 'contact-top';
+    var name = document.createElement('div');
+    name.className = 'contact-name';
+    name.textContent = fullName(u);
+    top.appendChild(name);
+    var ch = document.createElement('div');
+    ch.className = 'contact-time found-badge';
+    ch.textContent = u.has_history ? 'переписка есть' : 'не в контактах';
+    top.appendChild(ch);
+    var un = document.createElement('div');
+    un.className = 'contact-uname';
+    un.textContent = '@' + u.username + (u.online ? ' · в сети' : ' · не в сети');
+    body.appendChild(top); body.appendChild(un);
+    div.appendChild(st); div.appendChild(body);
+    div.addEventListener('click', function () { openSearched(u); });
+    wrap.appendChild(div);
+  }
+
+  // открыть чат с человеком, найденным через поиск
+  function openSearched(u) {
+    if (!contacts.has(u.id)) {
+      contacts.set(u.id, {
+        id: u.id, phone: u.phone || '', name: u.name || '', surname: u.surname || '',
+        username: u.username || '', online: !!u.online,
+        last_text: '', last_by: null, last_at: null, unread: 0
+      });
+    }
+    openChat(u.id);
   }
 
   function nowTyping(id) {
@@ -326,14 +407,19 @@
     var c = contacts.get(id);
     if (c && c.unread) { c.unread = 0; setTitle(totalUnread()); }
     renderContacts();
-    var c = contacts.get(id) || { id: id, name: '…', username: '', online: false };
-    $('chat-avatar').textContent = initials(c);
-    $('chat-avatar').style.background = 'linear-gradient(135deg,' + avatarColor(c.id) + ',#6759c9)';
-    $('chat-name').textContent = id === BOT_ID ? 'Мессенджер' : fullName(c);
-    updateChatStatus();
+    updateChatHeader();
     loadHistory(id, msgs);
     markRead(id);
     $('msg-input').focus();
+  }
+
+  function updateChatHeader() {
+    if (activeId == null) return;
+    var c = contacts.get(activeId) || { id: activeId, name: '', username: '', online: false };
+    $('chat-avatar').textContent = initials(c);
+    $('chat-avatar').style.background = 'linear-gradient(135deg,' + avatarColor(c.id) + ',#6759c9)';
+    $('chat-name').textContent = activeId === BOT_ID ? 'Мессенджер' : fullName(c);
+    updateChatStatus();
   }
 
   function updateChatStatus() {
@@ -502,7 +588,27 @@
   });
 
   // --- поиск ---
-  $('search-input').addEventListener('input', renderContacts);
+  $('search-input').addEventListener('input', function () {
+    searchResults = [];
+    searchPending = false;
+    renderContacts();
+    clearTimeout(searchTimer);
+    var q0 = this.value.trim();
+    if (!q0) return;
+    searchPending = true;
+    renderContacts();
+    searchTimer = setTimeout(function () { runSearch(q0); }, 250);
+  });
+  function runSearch(q) {
+    api('/api/search?q=' + encodeURIComponent(q))
+      .then(function (j) {
+        if (q !== $('search-input').value.trim()) return;
+        searchPending = false;
+        searchResults = j.users || [];
+        renderContacts();
+      })
+      .catch(function () { searchPending = false; renderContacts(); });
+  }
 
   // --- настройки ---
   $('settings-btn').addEventListener('click', enterSetup);
@@ -654,7 +760,18 @@
   // обновить контакт при новом сообщении (сдвинуть наверх)
   function touchContact(uid, text, at, incUnread) {
     var c = contacts.get(uid);
-    if (!c) return;
+    if (!c) {
+      // первое сообщение от незнакомца — добавляем в список и подгружаем данные
+      c = { id: uid, phone: '', name: '', surname: '', username: '', online: false,
+            last_text: text, last_by: uid, last_at: at, unread: 0 };
+      contacts.set(uid, c);
+      queueUserInfo(uid);
+      var sorted = Array.from(contacts.values()).sort(function (a, b) { return (b.last_at || 0) - (a.last_at || 0); });
+      contacts = new Map(sorted.map(function (x) { return [x.id, x]; }));
+      renderContacts();
+      setTitle(totalUnread());
+      return;
+    }
     c.last_text = text;
     c.last_by = uid;
     c.last_at = at;
@@ -668,6 +785,27 @@
   function markAllRead(uid) {
     var c = contacts.get(uid);
     if (c) { c.unread = 0; renderContacts(); setTitle(totalUnread()); }
+  }
+
+  // подгрузить имя/ник/номер незнакомца, от которого пришло сообщение
+  function queueUserInfo(uid) {
+    if (!uid || infoQueue[uid]) return;
+    infoQueue[uid] = true;
+    api('/api/user?id=' + uid)
+      .then(function (j) {
+        var u = j.user;
+        var c = contacts.get(u.id);
+        if (c) {
+          c.name = u.name || '';
+          c.surname = u.surname || '';
+          c.username = u.username || '';
+          c.phone = u.phone || '';
+          c.online = !!u.online;
+        }
+        renderContacts();
+        if (activeId === u.id) updateChatHeader();
+      })
+      .catch(function () {});
   }
 
   // ---------------- загрузка ----------------

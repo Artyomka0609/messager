@@ -486,7 +486,7 @@
       im.src = 'data:' + (m.image_mime || 'image/jpeg') + ';base64,' + m.image;
       im.alt = 'Фото';
       im.addEventListener('click', function () {
-        window.open(im.src, '_blank');
+        openLightbox(m.image, m.image_mime);
       });
       ph.appendChild(im);
       bubble.appendChild(ph);
@@ -523,6 +523,39 @@
   // --- отправка ---
   var attachB64 = null;
   var attachMime = null;
+
+  // --- просмотр фото ---
+  function imgExtFor(mime) {
+    mime = (mime || '').toLowerCase();
+    if (mime.indexOf('png') >= 0) return '.png';
+    if (mime.indexOf('webp') >= 0) return '.webp';
+    if (mime.indexOf('gif') >= 0) return '.gif';
+    return '.jpg';
+  }
+
+  function openLightbox(b64, mime) {
+    $('lb-img').src = 'data:' + (mime || 'image/jpeg') + ';base64,' + b64;
+    $('lightbox').classList.remove('hidden');
+  }
+
+  function closeLightbox() {
+    $('lightbox').classList.add('hidden');
+    $('lb-img').src = '';
+  }
+
+  $('lb-close').addEventListener('click', closeLightbox);
+  $('lb-backdrop').addEventListener('click', closeLightbox);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLightbox(); });
+  $('lb-download').addEventListener('click', function () {
+    var img = $('lb-img');
+    if (!img.src) { toast('Нет изображения'); return; }
+    var a = document.createElement('a');
+    a.href = img.src;
+    a.download = 'photo_' + Date.now() + imgExtFor(img.src.split(';')[0].split(':')[1]);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
 
   function sendCurrent() {
     var inp = $('msg-input');
@@ -721,6 +754,7 @@
     $('search-input').value = '';
     hideChatMenu();
     clearAttach();
+    closeLightbox();
     show('login-view');
     $('pass-input').value = '';
     $('reg-pass').value = '';

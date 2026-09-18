@@ -69,6 +69,7 @@
     <div id="usr-check" class="hint"></div>
     <button id="setup-save-btn" class="btn btn-primary btn-block">Сохранить и войти</button>
     <div id="setup-err" class="err"></div>
+    <button id="setup-exit-btn" class="btn btn-ghost btn-block">Выйти из аккаунта</button>
   </div>
 </div>
 
@@ -83,6 +84,7 @@
       </div>
       <button class="icon-btn hidden" id="install-btn" title="Установить приложение">&#8681;</button>
       <button class="icon-btn" id="settings-btn" title="Настройки">&#9881;</button>
+      <button class="logout-btn" id="logout-btn" title="Выйти">Выйти</button>
     </header>
     <div class="search-wrap">
       <input id="search-input" class="search" type="text" placeholder="Поиск: @ник (новые), имя (свои чаты)">
@@ -105,6 +107,10 @@
         <div class="chat-meta">
           <div class="chat-name" id="chat-name">—</div>
           <div class="chat-status" id="chat-status">—</div>
+        </div>
+        <button class="icon-btn more-btn" id="more-btn" title="Ещё">&#8943;</button>
+        <div id="chat-menu" class="chat-menu hidden">
+          <button id="delete-chat-btn" class="danger-item">Удалить чат</button>
         </div>
       </header>
       <div id="messages" class="messages"></div>

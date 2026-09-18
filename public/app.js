@@ -401,6 +401,7 @@
   // --- открытие чата ---
   function openChat(id, msgs) {
     activeId = id;
+    hideChatMenu();
     $('app-view').classList.add('mobile-chat');
     $('chat-empty').classList.add('hidden');
     $('chat-active').classList.remove('hidden');
@@ -612,6 +613,63 @@
 
   // --- настройки ---
   $('settings-btn').addEventListener('click', enterSetup);
+
+  // --- выход из аккаунта ---
+  function doLogout() {
+    api('/api/logout', { method: 'POST' }).catch(function () {});
+    try { if (ws) ws.close(); } catch (e) {}
+    localStorage.removeItem(TOKEN_KEY);
+    token = '';
+    me = null;
+    contacts = new Map();
+    searchResults = [];
+    activeId = null;
+    $('app-view').classList.remove('mobile-chat');
+    $('chat-active').classList.add('hidden');
+    $('chat-empty').classList.remove('hidden');
+    $('messages').innerHTML = '';
+    $('search-input').value = '';
+    hideChatMenu();
+    show('login-view');
+    $('pass-input').value = '';
+    $('reg-pass').value = '';
+  }
+  $('logout-btn').addEventListener('click', doLogout);
+  $('setup-exit-btn').addEventListener('click', doLogout);
+
+  // --- меню чата ---
+  function hideChatMenu() { $('chat-menu').classList.add('hidden'); }
+  $('more-btn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    $('chat-menu').classList.toggle('hidden');
+  });
+  $('chat-menu').addEventListener('click', function (e) { e.stopPropagation(); });
+  document.addEventListener('click', function () {
+    if (!$('chat-menu').classList.contains('hidden')) hideChatMenu();
+  });
+
+  $('delete-chat-btn').addEventListener('click', function () {
+    var id = activeId;
+    hideChatMenu();
+    if (id == null || id === BOT_ID) { toast('Этот чат удалить нельзя'); return; }
+    if (!window.confirm('Удалить чат? Он исчезнет из вашего списка (у собеседника история останется).')) return;
+    api('/api/chat/delete', { method: 'POST', body: { with: id } })
+      .then(function () {
+        contacts.delete(id);
+        delete typingTimers[id];
+        activeId = null;
+        $('messages').innerHTML = '';
+        lastMsgTs = null;
+        $('chat-active').classList.add('hidden');
+        $('chat-empty').classList.remove('hidden');
+        $('app-view').classList.remove('mobile-chat');
+        hideChatMenu();
+        renderContacts();
+        setTitle(totalUnread());
+        toast('Чат удалён');
+      })
+      .catch(function (e) { toast(e.message); });
+  });
 
   // --- мобильная кнопка «назад» (список чатов) ---
   $('back-btn').addEventListener('click', function () {

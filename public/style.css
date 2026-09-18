@@ -97,6 +97,12 @@ body{
   color:var(--text2);font-size:19px;cursor:pointer;transition:background .15s,color .15s;flex:none;
 }
 .icon-btn:hover{background:var(--panel-hover);color:var(--text)}
+.logout-btn{
+  border:none;background:var(--panel-hover);color:var(--text2);
+  padding:6px 11px;border-radius:8px;font-size:12px;cursor:pointer;flex:none;
+  transition:background .15s,color .15s;
+}
+.logout-btn:hover{background:#2b3a49;color:var(--text)}
 .search-wrap{padding:10px 12px 6px}
 .search{
   width:100%;padding:10px 14px;border:none;border-radius:10px;
@@ -140,8 +146,21 @@ body{
 .ce-sub{font-size:14px;max-width:340px}
 .chat-head{
   display:flex;align-items:center;gap:12px;padding:10px 16px;
-  background:var(--side);border-bottom:1px solid var(--border);
+  background:var(--side);border-bottom:1px solid var(--border);position:relative;
 }
+.more-btn{margin-left:auto;font-size:22px;letter-spacing:1px}
+.chat-menu{
+  position:absolute;top:100%;right:12px;z-index:30;min-width:170px;
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.5);
+}
+.chat-menu button{
+  display:block;width:100%;text-align:left;border:none;background:transparent;
+  color:var(--text);font-size:14px;padding:9px 12px;border-radius:8px;cursor:pointer;
+}
+.chat-menu button:hover{background:var(--panel-hover)}
+.chat-menu .danger-item{color:var(--danger)}
+.chat-menu .danger-item:hover{background:rgba(229,95,95,.12)}
 .chat-meta{min-width:0}
 .chat-name{font-weight:600;cursor:pointer}
 .chat-name:hover{text-decoration:underline}

@@ -127,6 +127,11 @@ SQLITE_SCHEMA = '''
     );
     CREATE INDEX IF NOT EXISTS idx_msg_pair ON messages (sender_id, recipient_id);
     CREATE INDEX IF NOT EXISTS idx_msg_rec ON messages (recipient_id, read);
+    CREATE TABLE IF NOT EXISTS chat_hidden (
+        user_id INTEGER NOT NULL,
+        peer_id INTEGER NOT NULL,
+        PRIMARY KEY (user_id, peer_id)
+    );
 '''
 
 PG_SCHEMA = '''
@@ -161,6 +166,11 @@ PG_SCHEMA = '''
     );
     CREATE INDEX IF NOT EXISTS idx_msg_pair ON messages (sender_id, recipient_id);
     CREATE INDEX IF NOT EXISTS idx_msg_rec ON messages (recipient_id, read);
+    CREATE TABLE IF NOT EXISTS chat_hidden (
+        user_id INTEGER NOT NULL,
+        peer_id INTEGER NOT NULL,
+        PRIMARY KEY (user_id, peer_id)
+    );
 '''
 
 
@@ -496,6 +506,12 @@ class WSConn:
             mid, now = send_message(uid, to, text)
             self.send_json({'type': 'sent', 'temp_id': temp_id, 'id': mid, 'to': to})
             HUB.send_to(to, {'type': 'msg', 'id': mid, 'from': uid, 'to': to, 'text': text, 'created_at': now})
+            # если чат был скрыт — новое сообщение возвращает его обоим
+            c = db()
+            c.execute("DELETE FROM chat_hidden WHERE (user_id=? AND peer_id=?) OR (user_id=? AND peer_id=?)",
+                      (uid, to, to, uid))
+            c.commit()
+            c.close()
             # бот отвечает
             if to == BOT_ID:
                 def bot_reply():
@@ -696,10 +712,12 @@ def contacts_for(me):
     c = db()
     # показываем только тех, с кем уже есть переписка — остальных можно найти через /api/search
     rows = c.execute(
-        "SELECT u.* FROM users u WHERE u.id<>? AND EXISTS ("
+        "SELECT u.* FROM users u WHERE u.id<>? "
+        "AND NOT EXISTS (SELECT 1 FROM chat_hidden h WHERE h.user_id=? AND h.peer_id=u.id) "
+        "AND EXISTS ("
         "SELECT 1 FROM messages m WHERE (m.sender_id=? AND m.recipient_id=u.id) "
         "OR (m.sender_id=u.id AND m.recipient_id=?)) ORDER BY u.id",
-        (me['id'], me['id'], me['id'])).fetchall()
+        (me['id'], me['id'], me['id'], me['id'])).fetchall()
     out = []
     for r in rows:
         u = user_dict(r)
@@ -761,6 +779,9 @@ def api_history(sock, token, qs):
     except Exception:
         return json_resp(sock, 400, {'error': 'bad with'})
     c = db()
+    if c.execute("SELECT 1 FROM chat_hidden WHERE user_id=? AND peer_id=?", (me['id'], with_id)).fetchone():
+        c.close()
+        return json_resp(sock, 200, {'messages': []})
     rows = c.execute(
         "SELECT * FROM messages WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?) ORDER BY id DESC LIMIT 80",
         (me['id'], with_id, with_id, me['id'])).fetchall()
@@ -787,8 +808,10 @@ def api_search(sock, token, qs):
         has_h = bool(c.execute(
             "SELECT 1 FROM messages WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?) LIMIT 1",
             (me['id'], u['id'], u['id'], me['id'])).fetchone())
-        u['has_history'] = has_h
-        if has_h:
+        hidden = bool(c.execute("SELECT 1 FROM chat_hidden WHERE user_id=? AND peer_id=?",
+                                (me['id'], u['id'])).fetchone())
+        u['has_history'] = has_h and not hidden
+        if u['has_history']:
             # свои (уже есть переписка): можно искать по имени, фамилии, нику и номеру
             hay = ' '.join([u['name'], u['surname'], u['username'], u['phone']]).lower()
             ok = q in hay or (digits and digits in u['phone'])
@@ -819,6 +842,39 @@ def api_user(sock, token, qs):
     if row is None:
         return json_resp(sock, 404, {'error': 'Пользователь не найден'})
     json_resp(sock, 200, {'user': user_dict(row)})
+
+
+def api_delete_chat(sock, token, body):
+    me = get_user_by_token(token)
+    if me is None:
+        return json_resp(sock, 401, {'error': 'Сессия недействительна'})
+    try:
+        js = json.loads(body.decode('utf-8'))
+    except Exception:
+        return json_resp(sock, 400, {'error': 'Неверный JSON'})
+    try:
+        peer = int(js.get('with', 0))
+    except Exception:
+        return json_resp(sock, 400, {'error': 'bad with'})
+    if peer == me['id']:
+        return json_resp(sock, 400, {'error': 'Нельзя удалить чат с самим собой'})
+    c = db()
+    c.execute("INSERT INTO chat_hidden (user_id, peer_id) SELECT ?, ? "
+              "WHERE NOT EXISTS (SELECT 1 FROM chat_hidden WHERE user_id=? AND peer_id=?)",
+              (me['id'], peer, me['id'], peer))
+    c.commit()
+    c.close()
+    json_resp(sock, 200, {'ok': True})
+
+
+def api_logout(sock, token):
+    if not token:
+        return json_resp(sock, 401, {'error': 'Сессия недействительна'})
+    c = db()
+    c.execute("DELETE FROM sessions WHERE token=?", (token,))
+    c.commit()
+    c.close()
+    json_resp(sock, 200, {'ok': True})
 
 
 def handle_http(sock, addr, request_line, headers, rest):
@@ -863,6 +919,10 @@ def handle_http(sock, addr, request_line, headers, rest):
             return api_state(sock, token)
         if method == 'POST' and route == '/api/profile':
             return api_profile(sock, token, read_body(sock, headers, rest))
+        if method == 'POST' and route == '/api/chat/delete':
+            return api_delete_chat(sock, token, read_body(sock, headers, rest))
+        if method == 'POST' and route == '/api/logout':
+            return api_logout(sock, token)
         if method == 'GET' and route == '/api/history':
             return api_history(sock, token, qs)
         if method == 'GET' and route == '/api/search':

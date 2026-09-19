@@ -195,6 +195,19 @@ def init_db():
             c.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
         if 'password_salt' not in cols:
             c.execute("ALTER TABLE users ADD COLUMN password_salt TEXT")
+        # старые SQLite-базы могут не иметь колонки avatar (создавались до аватарок)
+        if 'avatar' not in cols:
+            c.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
+    else:
+        # Neon/PostgreSQL: CREATE TABLE IF NOT EXISTS не добавляет колонку
+        # в уже существующую таблицу — поэтому нужен отдельный ALTER.
+        try:
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT")
+        except Exception:
+            try:
+                c.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
+            except Exception:
+                pass
     # миграция таблицы messages: колонки фото (для старых баз, где их ещё нет)
     try:
         c.execute("ALTER TABLE messages ADD COLUMN image " + ("BYTEA" if c.is_pg else "BLOB"))

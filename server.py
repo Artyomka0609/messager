@@ -107,6 +107,7 @@ SQLITE_SCHEMA = '''
         username      TEXT UNIQUE,
         password_hash TEXT,
         password_salt TEXT,
+        avatar        TEXT,
         online        INTEGER DEFAULT 0,
         created_at    INTEGER DEFAULT 0
     );
@@ -149,6 +150,7 @@ PG_SCHEMA = '''
         username      TEXT UNIQUE,
         password_hash TEXT,
         password_salt TEXT,
+        avatar        TEXT,
         online        INTEGER DEFAULT 0,
         created_at    BIGINT DEFAULT 0
     );
@@ -206,6 +208,10 @@ def init_db():
         c.execute("ALTER TABLE messages ADD COLUMN image_name TEXT")
     except Exception:
         pass
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
+    except Exception:
+        pass
     c.commit()
     # бот
     row = c.execute("SELECT id FROM users WHERE id=?", (BOT_ID,)).fetchone()
@@ -239,6 +245,7 @@ def user_dict(row):
         'name': row['name'] or '',
         'surname': row['surname'] or '',
         'username': row['username'] or '',
+        'avatar': row['avatar'] or '',
         'online': bool(row['online']),
         'created_at': row['created_at'],
     }
@@ -835,11 +842,20 @@ def api_profile(sock, token, body):
         return json_resp(sock, 400, {'error': 'Укажите имя'})
     if not re.match(r'^[a-z0-9_]{4,32}$', username):
         return json_resp(sock, 400, {'error': 'Ник: 4–32 символа, латиница, цифры и _'})
+    avatar = js.get('avatar')
+    if avatar is not None:
+        avatar = (avatar or '').strip()
+        if avatar and not (avatar.startswith('data:image/') and ';base64,' in avatar):
+            return json_resp(sock, 400, {'error': 'Недопустимое изображение'})
+        if len(avatar) > 2500000:
+            return json_resp(sock, 400, {'error': 'Изображение слишком большое (макс. ~1.8 МБ)'})
     c = db()
     dup = c.execute("SELECT id FROM users WHERE username=? AND id<>?", (username, me['id'])).fetchone()
     if dup:
         c.close()
         return json_resp(sock, 400, {'error': 'Этот ник уже занят, придумайте другой'})
+    if avatar is not None:
+        c.execute("UPDATE users SET avatar=? WHERE id=?", (avatar or None, me['id']))
     c.execute("UPDATE users SET name=?, surname=?, username=? WHERE id=?", (name, surname, username, me['id']))
     c.commit()
     c.close()

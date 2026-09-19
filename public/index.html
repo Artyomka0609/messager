@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Мессенджер</title>
+<meta name="description" content="Приватные сообщения в реальном времени">
+<meta name="theme-color" content="#17212b">
+<meta name="color-scheme" content="dark">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Мессенджер">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- ======================= ВХОД ======================= -->
+<div id="login-view" class="auth-wrap hidden">
+  <div class="auth-card">
+    <div class="brand">
+      <div class="brand-logo">&#9992;</div>
+      <h1>Мессенджер</h1>
+      <p class="brand-sub">Приватные сообщения в реальном времени</p>
+    </div>
+
+    <div id="step-login" class="auth-step">
+      <label>Номер телефона</label>
+      <input id="phone-input" class="inp" type="tel" placeholder="+7 (999) 123-45-67" autocomplete="tel" maxlength="20">
+      <label>Пароль</label>
+      <input id="pass-input" class="inp" type="password" placeholder="Ваш пароль" autocomplete="current-password">
+      <button id="login-btn" class="btn btn-primary btn-block">Войти</button>
+      <button id="go-register-btn" class="btn btn-ghost btn-block">Нет аккаунта? Зарегистрироваться</button>
+      <div id="login-err" class="err"></div>
+    </div>
+
+    <div id="step-register" class="auth-step hidden">
+      <label>Номер телефона</label>
+      <input id="reg-phone" class="inp" type="tel" placeholder="+7 (999) 123-45-67" autocomplete="tel" maxlength="20">
+      <label>Придумайте пароль</label>
+      <input id="reg-pass" class="inp" type="password" placeholder="Минимум 4 символа" autocomplete="new-password">
+      <label>Повторите пароль</label>
+      <input id="reg-pass2" class="inp" type="password" placeholder="Ещё раз" autocomplete="new-password">
+      <button id="register-btn" class="btn btn-primary btn-block">Создать аккаунт</button>
+      <button id="go-login-btn" class="btn btn-ghost btn-block">Уже есть аккаунт? Войти</button>
+      <div id="reg-err" class="err"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= ПРОФИЛЬ ======================= -->
+<div id="setup-view" class="auth-wrap hidden">
+  <div class="auth-card">
+    <div class="brand">
+      <div class="brand-logo">&#9992;</div>
+      <h1>Заполните профиль</h1>
+      <p class="brand-sub">Так вас увидят друзья</p>
+    </div>
+    <label>Имя</label>
+    <input id="set-name" class="inp" type="text" maxlength="40" placeholder="Иван">
+    <label>Фамилия</label>
+    <input id="set-surname" class="inp" type="text" maxlength="40" placeholder="Петров">
+    <label>Уникальный никнейм (@username)</label>
+    <input id="set-username" class="inp" type="text" maxlength="32" placeholder="ivan_petrov" autocomplete="off">
+    <div id="usr-check" class="hint"></div>
+    <button id="setup-save-btn" class="btn btn-primary btn-block">Сохранить и войти</button>
+    <div id="setup-err" class="err"></div>
+    <button id="setup-exit-btn" class="btn btn-ghost btn-block">Выйти из аккаунта</button>
+  </div>
+</div>
+
+<!-- ======================= ОСНОВНОЕ ПРИЛОЖЕНИЕ ======================= -->
+<div id="app-view" class="hidden app">
+  <aside id="sidebar">
+    <header class="side-head">
+      <div class="my-avatar" id="my-avatar">?</div>
+      <div class="my-meta">
+        <div class="my-name" id="my-name">—</div>
+        <div class="my-uname" id="my-uname">@none</div>
+      </div>
+      <button class="icon-btn hidden" id="install-btn" title="Установить приложение">&#8681;</button>
+      <button class="icon-btn" id="settings-btn" title="Настройки">&#9881;</button>
+      <button class="logout-btn" id="logout-btn" title="Выйти">Выйти</button>
+    </header>
+    <div class="search-wrap">
+      <input id="search-input" class="search" type="text" placeholder="Поиск: полный @ник (новые), имя (свои чаты)">
+    </div>
+    <div id="contacts" class="contacts"></div>
+    <div id="empty-contacts" class="empty-tip hidden">Пока нет чатов.<br>Найдите собеседника по полному @нику (например @ivan) — частичный ввод не покажет, чтобы ники нельзя было подбирать по буквам. Напишите ему, и чат появится здесь.</div>
+  </aside>
+
+  <main id="chat-panel">
+    <div id="chat-empty" class="chat-empty">
+      <div class="ce-pic">&#128172;</div>
+      <div class="ce-title">Выберите чат</div>
+      <div class="ce-sub">Нажмите на контакт слева, чтобы начать общение</div>
+    </div>
+
+    <div id="chat-active" class="hidden">
+      <header class="chat-head">
+        <button class="icon-btn back-btn" id="back-btn" title="Назад">&#8592;</button>
+        <div class="chat-avatar" id="chat-avatar">?</div>
+        <div class="chat-meta">
+          <div class="chat-name" id="chat-name">—</div>
+          <div class="chat-status" id="chat-status">—</div>
+        </div>
+        <button class="icon-btn more-btn" id="more-btn" title="Ещё">&#8943;</button>
+        <div id="chat-menu" class="chat-menu hidden">
+          <button id="delete-chat-btn" class="danger-item">Удалить чат</button>
+        </div>
+      </header>
+      <div id="messages" class="messages"></div>
+      <footer class="composer">
+        <div id="attach-preview" class="attach-preview hidden"></div>
+        <input type="file" id="file-input" accept="image/*" hidden>
+        <button class="icon-btn attach-btn" id="attach-btn" title="Открыть галерею">&#128206;</button>
+        <button class="icon-btn emoji-btn" id="emoji-btn" title="Эмодзи">&#9786;</button>
+        <div id="emoji-panel" class="emoji-panel hidden"></div>
+        <textarea id="msg-input" class="msg-input" rows="1" placeholder="Сообщение…"></textarea>
+        <button class="send-btn" id="send-btn" title="Отправить">&#10148;</button>
+      </footer>
+    </div>
+  </main>
+</div>
+
+<!-- ======================= ПАНЕЛЬ ГАЛЕРЕИ ======================= -->
+<div id="attach-panel" class="attach-panel hidden">
+  <div class="ap-head">
+    <span class="ap-title">Галерея — выберите фото или видео</span>
+    <button class="ap-btn" id="ap-refresh" title="Обновить">&#8635;</button>
+    <button class="ap-btn" id="ap-close" title="Закрыть">&times;</button>
+  </div>
+  <div class="ap-grid" id="ap-grid"><div class="ap-loading">Загружаем галерею…</div></div>
+  <div class="ap-actions">
+    <button class="ap-action" id="ap-file">&#128196;&nbsp;Отправить файл</button>
+  </div>
+  <div class="ap-tip">Нажмите на фото или видео — оно добавится в сообщение</div>
+</div>
+
+<!-- ======================= ПРОСМОТР ВЛОЖЕНИЯ ======================= -->
+<div id="lightbox" class="lightbox hidden">
+  <div class="lb-backdrop" id="lb-backdrop"></div>
+  <div class="lb-tools">
+    <button class="lb-btn" id="lb-download" title="Скачать">&#11015;</button>
+    <button class="lb-btn" id="lb-close" title="Закрыть">&times;</button>
+  </div>
+  <img id="lb-img" class="hidden" alt="Фото">
+  <video id="lb-video" class="hidden" controls playsinline></video>
+  <div id="lb-file" class="lb-file hidden">
+    <div class="lb-file-ico">&#128196;</div>
+    <div class="lb-file-name" id="lb-file-name"></div>
+    <div class="lb-file-size" id="lb-file-size"></div>
+    <div class="lb-file-hint">Нажмите «Скачать» — файл сохранится на устройство</div>
+  </div>
+</div>
+
+<!-- ======================= УВЕДОМЛЕНИЯ ======================= -->
+<div id="toast" class="toast toast-dark hidden"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

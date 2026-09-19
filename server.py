@@ -257,15 +257,16 @@ def norm_phone(raw):
 
 
 def user_dict(row):
+    keys = row.keys() if hasattr(row, 'keys') else []
     return {
         'id': row['id'],
         'phone': row['phone'],
-        'name': row['name'] or '',
-        'surname': row['surname'] or '',
-        'username': row['username'] or '',
-        'avatar': row['avatar'] or '',
-        'online': bool(row['online']),
-        'created_at': row['created_at'],
+        'name': (row['name'] or '') if 'name' in keys else '',
+        'surname': (row['surname'] or '') if 'surname' in keys else '',
+        'username': (row['username'] or '') if 'username' in keys else '',
+        'avatar': (row['avatar'] or '') if 'avatar' in keys else '',
+        'online': bool(row['online'] if 'online' in keys else 0),
+        'created_at': row['created_at'] if 'created_at' in keys else 0,
     }
 
 

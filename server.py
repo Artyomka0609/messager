@@ -206,23 +206,13 @@ def init_db():
     else:
         # Neon/PostgreSQL: CREATE TABLE IF NOT EXISTS не добавляет колонку
         # в уже существующую таблицу — поэтому нужен отдельный ALTER.
-        got = None
         try:
-            cols = c.execute("SELECT column_name FROM information_schema.columns "
-                             "WHERE table_name='users'").fetchall()
-            got = set(r['column_name'] for r in cols)
-            log('PG users columns: ' + ', '.join(sorted(got or [])))
-        except Exception as e:
-            log('ERR pg columns inspect: ' + str(e))
-        if got is None or 'avatar' not in got:
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT")
+        except Exception:
             try:
-                c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT")
-            except Exception as e:
-                log('ERR alter avatar IF NOT EXISTS: ' + str(e))
-                try:
-                    c.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
-                except Exception as e2:
-                    log('ERR alter avatar plain: ' + str(e2))
+                c.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
+            except Exception:
+                pass
     # миграция таблицы messages: колонки фото (для старых баз, где их ещё нет)
     try:
         c.execute("ALTER TABLE messages ADD COLUMN image " + ("BYTEA" if c.is_pg else "BLOB"))

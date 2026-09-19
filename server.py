@@ -325,11 +325,25 @@ def bot_welcome(user_id):
 def send_message(sender_id, recipient_id, text, image=None, image_mime=None, image_name=None):
     now = int(time.time() * 1000)
     c = db()
-    cur = c.execute("INSERT INTO messages (sender_id, recipient_id, text, image, image_mime, image_name, created_at, read) "
-                    "VALUES (?,?,?,?,?,?,?,0) RETURNING id",
-                    (sender_id, recipient_id, text, image if image is not None else None,
-                     image_mime if image is not None else None,
-                     image_name if image is not None else None, now))
+    # Какие колонки изображений реально есть в таблице messages?
+    # На старых Neon-базах миграции могли не примениться — тогда вставляем
+    # только текст, чтобы сообщения не «пропадали», а фото-часть просто теряется.
+    if c.is_pg:
+        cols = {r['column_name'] for r in c.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name='messages'").fetchall()}
+    else:
+        cols = {r[1] for r in c.execute("PRAGMA table_info(messages)").fetchall()}
+    has_img = {'image', 'image_mime', 'image_name'} <= cols
+    if has_img:
+        cur = c.execute("INSERT INTO messages (sender_id, recipient_id, text, image, image_mime, image_name, created_at, read) "
+                        "VALUES (?,?,?,?,?,?,?,0) RETURNING id",
+                        (sender_id, recipient_id, text, image if image is not None else None,
+                         image_mime if image is not None else None,
+                         image_name if image is not None else None, now))
+    else:
+        cur = c.execute("INSERT INTO messages (sender_id, recipient_id, text, created_at, read) "
+                        "VALUES (?,?,?,?,0) RETURNING id",
+                        (sender_id, recipient_id, text, now))
     mid = cur.fetchone()['id']
     c.commit()
     c.close()

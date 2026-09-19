@@ -475,3 +475,79 @@ body{
   .ce-title{font-size:18px}
   .ce-sub{font-size:13px}
 }
+
+/* ======================= КРОП АВАТАРА (круг) ======================= */
+.crop-wrap{
+  position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  background:rgba(8,12,18,.88);backdrop-filter:blur(4px);padding:18px
+}
+.crop-canvas{
+  width:300px;height:300px;border-radius:50%;
+  box-shadow:0 0 0 2px var(--border),0 12px 40px rgba(0,0,0,.55);
+  background:repeating-conic-gradient(#1a2430 0 25%,#141d27 0 50%) 0 0/20px 20px;
+  cursor:grab;touch-action:none;user-select:none
+}
+.crop-canvas:active{cursor:grabbing}
+.crop-tip{max-width:300px;text-align:center;font-size:13px;color:var(--text3);line-height:1.45}
+.crop-zoom{width:300px;accent-color:var(--accent)}
+.crop-btns{display:flex;gap:10px;width:300px}
+.crop-btns .btn{flex:1}
+
+/* лёгкий hover-блик на миниатюрах аватаров (не превью) */
+.contact .avatar,.chat-avatar,.msg-photo .avatar,.my-avatar{
+  transition:transform .15s,box-shadow .15s,filter .15s
+}
+.contact:hover .avatar,.chat-avatar:hover,.msg-photo .avatar:hover,.my-avatar:hover{
+  filter:brightness(1.1);
+  box-shadow:0 0 0 2px rgba(255,255,255,.22),0 4px 14px rgba(0,0,0,.35);
+  transform:translateY(-2px)
+}
+/* ======================= КРОП АВАТАРА (круг) ======================= */
+.crop-box{
+  position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;padding:18px;
+  background:rgba(10,14,20,.92);backdrop-filter:blur(6px)
+}
+.crop-canvas{
+  width:280px;height:280px;border-radius:50%;display:block;cursor:grab;
+  background:repeating-conic-gradient(#1b2530 0% 25%,#141d27 0% 50%) 50% / 22px 22px;
+  box-shadow:0 0 0 2px var(--border),0 16px 44px rgba(0,0,0,.55);
+  touch-action:none;user-select:none
+}
+.crop-canvas:active{cursor:grabbing}
+.crop-hint{max-width:280px;text-align:center;font-size:12.5px;color:var(--text3);line-height:1.5}
+.crop-zoom{width:280px;accent-color:var(--accent)}
+.crop-btns{display:flex;gap:10px;width:280px}
+.crop-btns .btn{flex:1}
+
+/* ======================= КРОП АВАТАРА (круг) ======================= */
+.crop-box{
+  position:fixed;inset:0;z-index:70;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:12px;padding:16px;background:rgba(10,14,20,.93);
+  backdrop-filter:blur(6px)
+}
+.crop-canvas{
+  width:280px;height:280px;border-radius:50%;cursor:grab;display:block;
+  box-shadow:0 0 0 2px var(--border),0 14px 44px rgba(0,0,0,.55);
+  touch-action:none;user-select:none
+}
+.crop-canvas:active{cursor:grabbing}
+.crop-hint{max-width:280px;text-align:center;font-size:12.5px;color:var(--text3);line-height:1.5}
+.crop-zoom{width:280px;accent-color:var(--accent)}
+.crop-btns{display:flex;gap:10px;width:280px}
+.crop-btns .btn{flex:1}
+
+/* лёгкий hover-блик (glare) на миниатюрах аватаров — только в списке/шапке, не в превью/лайтбоксе */
+.avatar,.my-avatar,.chat-avatar{position:relative;overflow:hidden}
+.avatar::after,.my-avatar::after,.chat-avatar::after{
+  content:"";position:absolute;inset:0;z-index:2;border-radius:50%;pointer-events:none;
+  background:linear-gradient(135deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 40%,transparent 62%);
+  opacity:0;transition:opacity .18s
+}
+.avatar:hover::after,.my-avatar:hover::after,.chat-avatar:hover::after{opacity:1}
+.avatar,.my-avatar,.chat-avatar{transition:transform .16s,filter .16s,box-shadow .16s}
+.avatar:hover,.my-avatar:hover,.chat-avatar:hover{
+  transform:translateY(-2px);
+  filter:brightness(1.12);
+  box-shadow:0 0 0 2px rgba(255,255,255,.16),0 6px 16px rgba(0,0,0,.4)
+}

@@ -327,14 +327,7 @@
     if (!f) return;
     fileToData(f, function (d) {
       if (!d) return;
-      pendingAvatar = 'data:image/jpeg;base64,' + d.b64;
-      var av = $('pm-avatar');
-      av.innerHTML = '';
-      var im = document.createElement('img');
-      im.src = pendingAvatar;
-      im.alt = '';
-      av.appendChild(im);
-      av.classList.add('has-img');
+      openCrop('data:image/jpeg;base64,' + d.b64);
     });
   });
   $('pm-save').addEventListener('click', function () {
@@ -363,6 +356,218 @@
   });
 
   // --- рендер списка контактов ---
+  // ==================== КРОП АВАТАРА (круг) ====================
+  var cropImg = null, cropScalePct = 100, cropCXpx = 0, cropCYpx = 0;
+  var cropDragging = false, cropPrevX = 0, cropPrevY = 0;
+  var CROP_L = 240;                     // диаметр видимой области canvas 280
+  var CROP_OUT = 96;                    // итог 192px круглая иконка
+
+  function openCrop(datasrc) {
+    var im = new Image();
+    im.onload = function () {
+      cropImg = im;
+      cropScalePct = 130;
+      cropCXpx = cropCYpx = 0;
+      drawCrop();
+      $('crop-canvas').classList.remove('hidden');
+      $('pm-avatar-box').classList.add('hidden');
+      $('pm-avatar-btn').classList.add('hidden');
+      $('crop-zoom').value = cropScalePct;
+    };
+    im.onerror = function () {
+      pendingAvatar = null;
+      toast('Не удалось прочитать изображение');
+    };
+    im.src = datasrc;
+  }
+
+  function drawCrop() {
+    var c = $('crop-canvas'), ctx = c.getContext('2d');
+    var S = c.width;
+    ctx.clearRect(0, 0, S, S);
+    if (!cropImg) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2);
+    ctx.clip();
+    var iw = cropImg.naturalWidth, ih = cropImg.naturalHeight;
+    var base = S / (Math.min(iw, ih));       // заполнить круг минимумом
+    var s = base * (cropScalePct / 100);
+    ctx.translate(S / 2 + cropCXpx, S / 2 + cropCYpx);
+    ctx.scale(s, s);
+    ctx.drawImage(cropImg, -iw / 2, -ih / 2, iw, ih);   // ← опечатка, поправлю ниже
+    ctx.restore();
+  }
+
+  $('crop-canvas').addEventListener('mousedown', function (e) {
+    if (!cropImg) return;
+    cropDragging = true国际化;
+    cropPrevX = e.clientX; cropPrevY = e.clientY;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!cropDragging) return;
+    var dx = e.clientX - cropPrevX, dy = e.clientY - cropPrevY;
+    cropPrevX = e.clientX; cropPrevY = e.clientY;
+    cropCXpx += dx * 1.6; cropCYpx += dy * 1.6;
+    drawCrop();
+  });
+  window.addEventListener('mouseup', function () { cropDragging = false; });
+  $('crop-canvas').addEventListener('wheel', function (e) {
+    e.preventDefault();
+    cropScalePct = Math.max(40, Math.min(500, cropScalePct + (e.deltaY < 0 ? 10 : -10)));
+    $('crop-zoom').value = cropScalePct;
+    drawCrop();
+  }, { passive: false });
+  $('crop-zoom').addEventListener('input', function () {
+    cropScalePct = parseInt(this.value, 10) || 100;
+    drawCrop();
+  });
+
+  function applyCrop() {
+    if (!cropImg) return;
+    var out = document.createElement('canvas');
+    out.width = out.height = CROP_OUT * 2;
+    var octx = out.getContext('2d');
+    octx.save();
+    octx.beginPath();
+    octx.arc(CROP_OUT, CROP_OUT, CROP_OUT, 0, Math.PI * 2);
+    octx.clip();
+    var iw = cropImg.naturalWidth, ih = cropImg.naturalHeight;
+    var base = (CROP_OUT * 2) / Math.min(iw, ih);
+    var s = base * (cropScalePct / 100);
+    octx.translate(CROP_OUT + cropCXpx / 1.16, CROP_OUT + cropCYpx / 1.16);
+    octx.scale(s, s);
+    octx.drawImage(cropImg, -iw / 2, -ih / 2, iw, ih);
+    octx.restore();
+    pendingAvatar = out.toDataURL('image/png');
+    var av = $('pm-avatar');
+    av.innerHTML = '';
+    var im = document.createElement('img');
+    im.src = pendingAvatar;
+    im.alt = '';
+    av.appendChild(im);
+    av.classList.add('has-img');
+    $('crop-canvas').classList.add('hidden');
+    $('pm-avatar-box').classList.remove('hidden');
+    $('pm-avatar-btn').classList.remove('hidden');
+  }
+
+  function closeCrop() {
+    $('crop-canvas').classList.add('hidden');
+    $('pm-avatar-box').classList.remove('hidden');
+    $('pm-avatar-btn').classList.remove('hidden');
+  }
+  $('crop-cancel').addEventListener('click', closeCrop);
+  $('crop-apply').addEventListener('click', applyCrop);
+
+  // ==================== КРОП АВАТАРА (круг) ====================
+  var CROP_S = 320;                       // размер канваса
+  var CROP_R = CROP_S / 2;                // радиус круга = канвас целиком
+  var cropImg = null;                     // Image после загрузки
+  var cropScalePct = 150;                 // зум %  (100 = картинка вписана в круг)
+  var cropOffX = 0, cropOffY = 0;         // сдвиг фото в пикселях исходника
+  var cropDragOn = false, cropPrevX = 0, cropPrevY = 0;
+
+  function drawCrop() {
+    var c = $('crop-canvas'), ctx = c.getContext('2d');
+    var S = c.width;
+    ctx.clearRect(0, 0, S, S);
+    if (!cropImg) return;
+    var iw = cropImg.naturalWidth, ih = cropImg.naturalHeight;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2);
+    ctx.clip();
+    var base = (S / 2) / Math.min(iw, ih);            // весь маленький край вписан в круг
+    var s = base * (cropScalePct / 100);
+    ctx.translate(S / 2 + cropOffX * s, S / 2 + cropOffY * s);
+    ctx.scale(s, s);
+    ctx.drawImage(cropImg, -iw / 2, -ih / 2, iw, ih);
+    ctx.restore();
+  }
+
+  function openCrop(src) {
+    var im = new Image();
+    cropImg = null;
+    im.onload = function () {
+      cropImg = im;
+      cropScalePct = 100;
+      cropOffX = 0; cropOffY = 0;
+      $('crop-canvas').classList.remove('hidden');
+      $('pm-avatar-box').classList.add('hidden');
+      $('pm-avatar-btn').classList.add('hidden');
+      $('crop-zoom').value = cropScalePct;
+      drawCrop();
+    };
+    im.onerror = function () {
+      pendingAvatar = null;
+      toast('Не удалось загрузить изображение');
+    };
+    im.src = src;
+  }
+
+  var ccv = $('crop-canvas');
+  ccv.addEventListener('mousedown', function (e) {
+    if (!cropImg) return;
+    cropDragOn = true; cropPrevX = e.clientX; cropPrevY = e.clientY;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!cropDragOn) return;
+    var dx = (e.clientX - cropPrevX) / CROP_S, dy = (e.clientY - cropPrevY) / CROP_S;
+    cropPrevX = e.clientX; cropPrevY = e.clientY;
+    cropOffX += dx * 1.6; cropOffY += dy * 1.6;
+    drawCrop();
+  });
+  window.addEventListener('mouseup', function () { cropDragOn = false; });
+  ccv.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    cropScalePct = Math.max(60, Math.min(500, cropScalePct + (e.deltaY < 0 ? 15 : -15)));
+    $('crop-zoom').value = cropScalePct;
+    drawCrop();
+  }, { passive: false });
+  $('crop-zoom').addEventListener('input', function () {
+    cropScalePct = parseInt(this.value, 10) || 100;
+    drawCrop();
+  });
+
+  function applyCrop() {
+    if (!cropImg) return;
+    var out = document.createElement('canvas');
+    out.width = out.height = CROP_S;
+    var octx = out.getContext('2d');
+    octx.save();
+    octx.beginPath();
+    octx.arc(CROP_S / 2, CROP_S / 2, CROP_S / 2, 0, Math.PI * 2);
+    octx.clip();
+    var iw = cropImg.naturalWidth, ih = cropImg.naturalHeight;
+    var base = (CROP_S / 2) / Math.min(iw, ih);
+    var s = base * (cropScalePct / 100);
+    octx.translate(CROP_S / 2 + cropOffX * s, CROP_S / 2 + cropOffY * s);
+    octx.scale(s, s);
+    octx.drawImage(cropImg, -iw / 2, -ih / 2, iw, ih);
+    octx.restore();
+    pendingAvatar = out.toDataURL('image/png');
+    var av = $('pm-avatar');
+    av.innerHTML = '';
+    var im = document.createElement('img');
+    im.src = pendingAvatar;
+    im.alt = '';
+    av.appendChild(im);
+    av.classList.add('has-img');
+    $('crop-canvas').classList.add('hidden');
+    $('pm-avatar-box').classList.remove('hidden');
+    $('pm-avatar-btn').classList.remove('hidden');
+  }
+  $('crop-apply').addEventListener('click', applyCrop);
+  $('crop-cancel').addEventListener('click', function () {
+    pendingAvatar = null;
+    $('crop-canvas').classList.add('hidden');
+    $('pm-avatar-box').classList.remove('hidden');
+    $('pm-avatar-btn').classList.remove('hidden');
+  });
+
   function renderContacts() {
     var wrap = $('contacts');
     wrap.innerHTML = '';

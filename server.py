@@ -45,6 +45,11 @@ def log(msg):
             f.write('[%s] %s\n' % (datetime.datetime.now().strftime('%d.%m %H:%M:%S'), msg))
     except Exception:
         pass
+    # дублируем в stdout — это видно в Render Logs
+    try:
+        print('[%s] %s' % (datetime.datetime.now().strftime('%d.%m %H:%M:%S'), msg), flush=True)
+    except Exception:
+        pass
 
 
 # --------------------------------------------------------------------------
@@ -1095,7 +1100,12 @@ class ConnThread(threading.Thread):
                     headers[k.decode('latin1').strip().lower()] = v.decode('latin1').strip()
             handle_http(sock, self.addr, request_line, headers, rest)
         except Exception:
-            log('ERR http: ' + traceback.format_exc(limit=3))
+            log('ERR http: ' + traceback.format_exc(limit=8))
+            try:
+                print('TRACEBACK http:', flush=True)
+                print(traceback.format_exc(), flush=True)
+            except Exception:
+                pass
         finally:
             try:
                 sock.close()

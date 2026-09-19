@@ -694,41 +694,45 @@
     fr.readAsDataURL(file);
   }
 
-  function hideAttachMenu() { $('attach-menu').classList.add('hidden'); }
+  function setAttachMode(mode) {
+    attachMode = mode === 'files' ? 'files' : 'gallery';
+    Array.prototype.forEach.call(document.querySelectorAll('.am-seg'), function (b) {
+      b.classList.toggle('active', b.getAttribute('data-mode') === attachMode);
+    });
+  }
 
-  function pickKind(kind) {
-    hideAttachMenu();
+  function openAttachPicker() {
     if (window.showOpenFilePicker) {
       var types = [];
-      if (kind === 'image') {
-        types = [{ description: 'Фото', accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.gif'] } }];
-      } else if (kind === 'video') {
-        types = [{ description: 'Видео', accept: { 'video/*': ['.mp4', '.webm', '.mov', '.mkv', '.avi'] } }];
+      if (attachMode === 'gallery') {
+        types = [{ description: 'Галерея', accept: {
+            'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.gif'],
+            'video/*': ['.mp4', '.webm', '.mov', '.mkv', '.avi']
+          } }];
       }
-      window.showOpenFilePicker({ types: types, multiple: false })
+      window.showOpenFilePicker(types.length ? { types: types, multiple: false } : { multiple: false })
         .then(function (handles) {
           if (handles && handles[0]) {
-            handles[0].getFile().then(function (f) { handlePicked(f, kind); });
+            handles[0].getFile().then(function (f) { handlePicked(f); });
           }
         })
         .catch(function (err) {
           if (err && err.name === 'AbortError') return;
-          fallbackInput(kind);
+          fallbackInput();
         });
       return;
     }
-    fallbackInput(kind);
+    fallbackInput();
   }
 
-  function fallbackInput(kind) {
+  function fallbackInput() {
     var inp = $('file-input');
-    inp.accept = kind === 'image' ? 'image/*' : (kind === 'video' ? 'video/*' : '*/*');
+    inp.accept = attachMode === 'gallery' ? 'image/*,video/*' : '*/*';
     inp.value = '';
-    inp.dataset.kind = kind;
     inp.click();
   }
 
-  function handlePicked(file, kind) {
+  function handlePicked(file) {
     if (!file) return;
     if (file.size > FILE_LIMIT) { toast('Файл больше 50 МБ'); return; }
     var mime = (file.type || '').toLowerCase() || 'application/octet-stream';
@@ -805,22 +809,16 @@
     p.innerHTML = '';
   }
 
-  $('attach-btn').addEventListener('click', function (e) {
-    e.stopPropagation();
-    $('attach-menu').classList.toggle('hidden');
-  });
-  document.addEventListener('click', function (e) {
-    if (!e.target.closest('#attach-menu') && !e.target.closest('#attach-btn')) hideAttachMenu();
-  });
-  Array.prototype.forEach.call(document.querySelectorAll('.am-item'), function (it) {
-    it.addEventListener('click', function () { pickKind(it.getAttribute('data-kind')); });
+  var attachMode = 'gallery';
+
+  $('attach-btn').addEventListener('click', openAttachPicker);
+  Array.prototype.forEach.call(document.querySelectorAll('.am-seg'), function (b) {
+    b.addEventListener('click', function () { setAttachMode(b.getAttribute('data-mode')); });
   });
   $('file-input').addEventListener('change', function () {
     var f = this.files && this.files[0];
-    var kind = this.dataset.kind || 'file';
     this.value = '';
-    this.dataset.kind = '';
-    handlePicked(f, kind);
+    handlePicked(f);
   });
 
   $('send-btn').addEventListener('click', sendCurrent);

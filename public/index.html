@@ -115,14 +115,13 @@
       </header>
       <div id="messages" class="messages"></div>
       <footer class="composer">
-        <div id="attach-menu" class="attach-menu hidden">
-          <div class="am-item" data-kind="image">&#128247; <span>Фото</span></div>
-          <div class="am-item" data-kind="video">&#127916; <span>Видео</span></div>
-          <div class="am-item" data-kind="file">&#128196; <span>Файл</span></div>
+        <div class="attach-bar">
+          <button class="am-seg active" data-mode="gallery">&#128247; Галерея</button>
+          <button class="am-seg" data-mode="files">&#128193; Файлы</button>
         </div>
         <div id="attach-preview" class="attach-preview hidden"></div>
         <input type="file" id="file-input" accept="image/*" hidden>
-        <button class="icon-btn attach-btn" id="attach-btn" title="Прикрепить фото, видео или файл">&#128206;</button>
+        <button class="icon-btn attach-btn" id="attach-btn" title="Открыть галерею (фото и видео) или файлы">&#128206;</button>
         <button class="icon-btn emoji-btn" id="emoji-btn" title="Эмодзи">&#9786;</button>
         <div id="emoji-panel" class="emoji-panel hidden"></div>
         <textarea id="msg-input" class="msg-input" rows="1" placeholder="Сообщение…"></textarea>

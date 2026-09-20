@@ -327,21 +327,14 @@
     if (!f) return;
     fileToData(f, function (d) {
       if (!d) return;
-      var durl = 'data:image/jpeg;base64,' + d.b64;
-      pendingAvatar = durl;
-      // мгновенное превью (круглое через border-radius на .inp-img)
+      pendingAvatar = 'data:image/jpeg;base64,' + d.b64;
       var av = $('pm-avatar');
       av.innerHTML = '';
       var im = document.createElement('img');
-      im.src = durl;
+      im.src = pendingAvatar;
       im.alt = '';
       av.appendChild(im);
       av.classList.add('has-img');
-      // не-нужный кроп-оверлей спрятан навсегда
-      var cc = $('crop-box');
-      if (cc && !cc.classList.contains('hidden')) cc.classList.add('hidden');
-      $('pm-avatar-wrap').classList.remove('hidden');
-      $('pm-avatar-btn').classList.remove('hidden');
     });
   });
   $('pm-save').addEventListener('click', function () {
@@ -1000,7 +993,11 @@
 
   function pickFromGalleryDialog() {
     closeAttachPanel();
-    if (window.showOpenFilePicker) {
+    // На телефонах НЕ используем showOpenFilePicker (это десктопный API —
+    // он открывает файловую систему, а не галерею). На touch-устройствах
+    // идём через обычный <input type=file> — браузер сам откроет галерею.
+    var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    if (!isTouch && window.showOpenFilePicker) {
       window.showOpenFilePicker({ multiple: true, types: [{
         description: 'Галерея',
         accept: {

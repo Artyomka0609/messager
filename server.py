@@ -207,30 +207,21 @@ def init_db():
         # Neon/PostgreSQL: CREATE TABLE IF NOT EXISTS не добавляет колонку
         # в уже существующую таблицу — поэтому нужен отдельный ALTER.
         try:
-            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT")
-        except Exception:
-            try:
-                c.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
-            except Exception:
-                pass
-    # миграция таблицы messages: колонки фото (для старых баз, где их ещё нет)
-    try:
-        c.execute("ALTER TABLE messages ADD COLUMN image " + ("BYTEA" if c.is_pg else "BLOB"))
-    except Exception:
-        pass
-    try:
-        c.execute("ALTER TABLE messages ADD COLUMN image_mime TEXT")
-    except Exception:
-        pass
-    try:
-        c.execute("ALTER TABLE messages ADD COLUMN image_name TEXT")
-    except Exception:
-        pass
-    try:
-        c.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
-    except Exception:
-        pass
-    c.commit()
+            c.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
+        except Exception as e:
+            # IF NOT EXISTS может отсутствовать на старых драйверах — но код выше
+            # уже пробует IF NOT EXISTS; сюда попадаем, только если колонка есть.
+            log("init_db: ALTER users avatar -> %s" % e)
+    # миграция таблицы messages: колонки фото (для старых баз, где их ещё нет).
+    # Фото НЕ должны молча теряться: любая ошибка ALTER пишется в Render Logs.
+    for col, ddl in (("image", "ALTER TABLE messages ADD COLUMN image BYTEA"),
+                     ("image_mime", "ALTER TABLE messages ADD COLUMN image_mime TEXT"),
+                     ("image_name", "ALTER TABLE messages ADD COLUMN image_name TEXT"),
+                     ("avatar_old", "")):
+        try:
+            c.execute(ddl)
+        except Exception as e:
+            log("init_db: ALTER messages %s -> %r" % (col, str(e)[:200]))
     # бот
     row = c.execute("SELECT id FROM users WHERE id=?", (BOT_ID,)).fetchone()
     if row is None:

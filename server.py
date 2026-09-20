@@ -214,14 +214,25 @@ def init_db():
             log("init_db: ALTER users avatar -> %s" % e)
     # миграция таблицы messages: колонки фото (для старых баз, где их ещё нет).
     # Фото НЕ должны молча теряться: любая ошибка ALTER пишется в Render Logs.
-    for col, ddl in (("image", "ALTER TABLE messages ADD COLUMN image BYTEA"),
-                     ("image_mime", "ALTER TABLE messages ADD COLUMN image_mime TEXT"),
-                     ("image_name", "ALTER TABLE messages ADD COLUMN image_name TEXT"),
-                     ("avatar_old", "")):
+    # На PostgreSQL psycopg2 «убивает» транзакцию после первой ошибки
+    # (current transaction is aborted) — поэтому после каждого сбоя делаем
+    # rollback, иначе следующие ALTER молча роняются, а image-колонки
+    # так и не появляются -> фото теряются.
+    for col in ("image", "image_mime", "image_name"):
         try:
-            c.execute(ddl)
+            if c.is_pg:
+                c.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS %s %s" % (
+                    col, "BYTEA" if col == "image" else "TEXT"))
+            else:
+                c.execute("ALTER TABLE messages ADD COLUMN %s %s" % (
+                    col, "BLOB" if col == "image" else "TEXT"))
+            c.commit()
         except Exception as e:
-            log("init_db: ALTER messages %s -> %r" % (col, str(e)[:200]))
+            log("init_db: ALTER messages %s -> %s" % (col, str(e)[:200]))
+            try:
+                c.raw.rollback()
+            except Exception:
+                pass
     # бот
     row = c.execute("SELECT id FROM users WHERE id=?", (BOT_ID,)).fetchone()
     if row is None:

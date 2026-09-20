@@ -157,25 +157,6 @@
       <div class="pm-avatar" id="pm-avatar">?</div>
       <button class="pm-avatar-btn" id="pm-avatar-btn">&#128247;&nbsp;Изменить фото</button>
       <input type="file" id="pm-avatar-file" accept="image/*" hidden>
-      <div id="crop-box" class="crop-box hidden">
-        <canvas id="crop-canvas" class="crop-canvas" width="280" height="280"></canvas>
-        <div class="crop-hint">Передвигайте фото мышью и масштабируйте колёсиком — в круг попадёт ровно то, что видно. За кругом — обрежется.</div>
-        <input type="range" id="crop-zoom" class="crop-zoom" min="100" max="300" value="100" step="5">
-        <div class="crop-btns">
-          <button id="crop-cancel" class="btn btn-ghost btn-block">Отмена</button>
-          <button id="crop-apply" class="btn btn-primary btn-block">Применить</button>
-        </div>
-      </div>
-      <!-- ======= кроп аватара (круг) ======= -->
-      <div id="crop-wrap" class="crop-wrap hidden">
-        <canvas id="crop-canvas" class="crop-canvas" width="300" height="300"></canvas>
-        <div class="crop-tip">Передвигайте и масштабируйте фото (колесо мыши / двойной тап), в круг попадёт ровно то, что видно</div>
-        <input type="range" id="crop-zoom" class="crop-zoom" min="100" max="500" value="100" step="5">
-        <div class="crop-btns">
-          <button id="crop-cancel" class="btn btn-ghost btn-block">Отмена</button>
-          <button id="crop-apply" class="btn btn-primary btn-block">Применить (круг)</button>
-        </div>
-      </div>
     </div>
     <label class="pm-lbl">Имя</label>
     <input class="inp" id="pm-name" maxlength="40" placeholder="Имя">
